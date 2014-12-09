@@ -1,64 +1,80 @@
 package com.example.yusaku.firstcameratest;
 
-import android.hardware.Camera;
-import android.support.v7.app.ActionBarActivity;
+import android.app.Activity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.view.Menu;
-import android.view.MenuItem;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.os.Handler;
+import android.os.Message;
+import android.util.Log;
+import android.view.ViewGroup.LayoutParams;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
 
-import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
-import org.opencv.core.Core;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.imgproc.Imgproc;
-import org.opencv.android.BaseLoaderCallback;
+public class MainActivity extends Activity  {
+    private static final String TAG = "Sample::Activity";
+    private InfomationView mInfoview;
+    private CameraPreview mCameraPreview;
+    // private MainHandler mHandler = new MainHandler();
 
 
-public class MainActivity extends ActionBarActivity {
-
-    private Camera myCamera;
-
-    private SurfaceHolder.Callback mSurfaceListener =
-            new SurfaceHolder.Callback() {
-                public void surfaceCreated(SurfaceHolder holder) {
-                    // TODO Auto-generated method stub
-                    myCamera = Camera.open();
-                    try {
-                        myCamera.setPreviewDisplay(holder);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                public void surfaceDestroyed(SurfaceHolder holder) {
-                    // TODO Auto-generated method stub
-                    myCamera.release();
-                    myCamera = null;
-                }
-
-                public void surfaceChanged(SurfaceHolder holder, int format, int width,
-                                           int height) {
-                    // TODO Auto-generated method stub
-                    Camera.Parameters parameters = myCamera.getParameters();
-                    parameters.setPreviewSize(width, height);
-                    myCamera.setParameters(parameters);
-                    myCamera.startPreview();
-                }
-            };
-
-    /** Called when the activity is first created. */
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        Log.i(TAG, "onCreate");
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        SurfaceView mySurfaceView = (SurfaceView)findViewById(R.id.surface_view);
-        SurfaceHolder holder = mySurfaceView.getHolder();
-        holder.addCallback(mSurfaceListener);
-        holder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+        LayoutParams params = new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT);
+
+        FrameLayout fl = new FrameLayout(this); // ビューを重ねて表示するためのレイアウト
+        fl.setLayoutParams(params);
+
+        mCameraPreview = new CameraPreview(this, new MainHandler());
+        mCameraPreview.setLayoutParams(params);
+        fl.addView(mCameraPreview);
+
+        mInfoview = new InfomationView(this);
+        mInfoview.setLayoutParams(params);
+        fl.addView(mInfoview);
+
+        setContentView(fl);
+
+        init(); //学習画像の登録
     }
+
+    private void init() {
+        int[] ids = {R.raw.no_crossing, R.raw.closure};
+        int[] widths = new int[2];
+        int[] heights = new int[2];
+        int[][] rgbas = new int[2][];
+        for(int i = 0; i < ids.length; i++){
+            Bitmap bitmap = BitmapFactory.decodeResource(getResources(), ids[i]); // 学習画像の読み込み
+            widths[i] = bitmap.getWidth();
+            heights[i] = bitmap.getHeight();
+            rgbas[i] = new int[widths[i] * heights[i]];
+            bitmap.getPixels(rgbas[i], 0, widths[i], 0, 0, widths[i], heights[i]); // 各学習画像のピクセル値をrgbasに格納
+        }
+        setTrainingImages(widths, heights, rgbas, 2);
+    }
+
+    private class MainHandler extends Handler {
+
+        public void handleMessage(Message msg) {
+            mInfoview.setDetectImageId(msg.arg1);      //検出した画像IDをセット
+            mInfoview.invalidate();                  //InfomationViewの更新
+            mCameraPreview.restartPreviewCallback(); // Previewのリスタート
+        }
+    }
+
+    public native void setTrainingImage(int width, int height, int[] rgba);
+    public native void setTrainingImages(int[] widths, int[] heights, int[][] rgbas, int imageNum);
+
+    static {
+        System.loadLibrary("native_sample"); //ネイティブライブラリの読み込み
+    }
+
+
 }
