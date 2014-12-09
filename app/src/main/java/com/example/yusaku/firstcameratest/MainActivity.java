@@ -5,6 +5,8 @@ import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.LoaderCallbackInterface;
@@ -16,78 +18,47 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.android.BaseLoaderCallback;
 
 
-public class MainActivity extends ActionBarActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
+public class MainActivity extends ActionBarActivity {
 
-    private CameraBridgeViewBase mCameraView;
-    private Mat mOutputFrame;
+    private Camera myCamera;
 
-    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
-        @Override
-        public void onManagerConnected(int status) {
-            switch (status) {
-                case LoaderCallbackInterface.SUCCESS:
-                    mCameraView.enableView();
-                    break;
-                default:
-                    super.onManagerConnected(status);
-                    break;
-            }
-        }
-    };
+    private SurfaceHolder.Callback mSurfaceListener =
+            new SurfaceHolder.Callback() {
+                public void surfaceCreated(SurfaceHolder holder) {
+                    // TODO Auto-generated method stub
+                    myCamera = Camera.open();
+                    try {
+                        myCamera.setPreviewDisplay(holder);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
 
+                public void surfaceDestroyed(SurfaceHolder holder) {
+                    // TODO Auto-generated method stub
+                    myCamera.release();
+                    myCamera = null;
+                }
+
+                public void surfaceChanged(SurfaceHolder holder, int format, int width,
+                                           int height) {
+                    // TODO Auto-generated method stub
+                    Camera.Parameters parameters = myCamera.getParameters();
+                    parameters.setPreviewSize(width, height);
+                    myCamera.setParameters(parameters);
+                    myCamera.startPreview();
+                }
+            };
+
+    /** Called when the activity is first created. */
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
-
-
-        mCameraView = (CameraBridgeViewBase)findViewById(R.id.camera_view);
-        mCameraView.setCvCameraViewListener(this);
-
-    }
-
-    @Override
-    public void onPause() {
-        if (mCameraView != null) {
-            mCameraView.disableView();
-        }
-        super.onPause();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_4, this, mLoaderCallback);
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        if (mCameraView != null) {
-            mCameraView.disableView();
-        }
-    }
-
-    @Override
-    public void onCameraViewStarted(int width, int height) {
-        // Mat(int rows, int cols, int type)
-        // rows(行): height, cols(列): width
-        mOutputFrame = new Mat(height, width, CvType.CV_8UC1);
-    }
-
-    @Override
-    public void onCameraViewStopped() {
-        mOutputFrame.release();
-    }
-
-    @Override
-    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        // Cannyフィルタをかける
-        Imgproc.Canny(inputFrame.gray(), mOutputFrame, 80, 100);
-        // ビット反転
-        Core.bitwise_not(mOutputFrame, mOutputFrame);
-        return mOutputFrame;
+        SurfaceView mySurfaceView = (SurfaceView)findViewById(R.id.surface_view);
+        SurfaceHolder holder = mySurfaceView.getHolder();
+        holder.addCallback(mSurfaceListener);
+        holder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
     }
 }
